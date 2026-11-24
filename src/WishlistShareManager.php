@@ -32,6 +32,13 @@ class WishlistShareManager
         }
 
         $tokenLength = $this->validatedConfigInteger('token_length', 64, 32, 256);
+
+        if ($tokenLength % 2 !== 0) {
+            throw new InvalidArgumentException(
+                'Configuration [token_length] must be an even number of hexadecimal characters.'
+            );
+        }
+
         $defaultExpiryDays = $this->validatedConfigInteger('default_expiry_days', 30, 0);
         $defaultMaxViews = $this->config['default_max_views'] ?? null;
 

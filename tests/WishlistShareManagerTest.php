@@ -90,11 +90,10 @@ class WishlistShareManagerTest extends TestCase
         foreach ([0, 1, 31, 33, 257, -2, '64.5', 'invalid'] as $length) {
             try {
                 (new WishlistShareManager(['token_length' => $length]))->create($wishlist);
-            } catch (InvalidArgumentException) {
-                continue;
+                $this->fail('Invalid token_length configuration was accepted: '.var_export($length, true));
+            } catch (InvalidArgumentException $exception) {
+                $this->assertInstanceOf(InvalidArgumentException::class, $exception);
             }
-
-            $this->fail('Invalid token_length configuration was accepted: '.var_export($length, true));
         }
     }
 
@@ -105,11 +104,10 @@ class WishlistShareManagerTest extends TestCase
         foreach ([0, -1, 'invalid'] as $maxViews) {
             try {
                 (new WishlistShareManager(['default_max_views' => $maxViews]))->create($wishlist);
-            } catch (InvalidArgumentException) {
-                continue;
+                $this->fail('Invalid default_max_views configuration was accepted: '.var_export($maxViews, true));
+            } catch (InvalidArgumentException $exception) {
+                $this->assertInstanceOf(InvalidArgumentException::class, $exception);
             }
-
-            $this->fail('Invalid default_max_views configuration was accepted: '.var_export($maxViews, true));
         }
     }
 
@@ -120,11 +118,10 @@ class WishlistShareManagerTest extends TestCase
         foreach ([-1, 'invalid', '7.5'] as $days) {
             try {
                 (new WishlistShareManager(['default_expiry_days' => $days]))->create($wishlist);
-            } catch (InvalidArgumentException) {
-                continue;
+                $this->fail('Invalid default_expiry_days configuration was accepted: '.var_export($days, true));
+            } catch (InvalidArgumentException $exception) {
+                $this->assertInstanceOf(InvalidArgumentException::class, $exception);
             }
-
-            $this->fail('Invalid default_expiry_days configuration was accepted: '.var_export($days, true));
         }
     }
 
