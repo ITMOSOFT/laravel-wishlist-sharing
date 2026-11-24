@@ -5,7 +5,6 @@ namespace ItmoSoft\WishlistSharing;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Str;
 use InvalidArgumentException;
 use ItmoSoft\WishlistSharing\Models\WishlistShare;
 
@@ -32,12 +31,23 @@ class WishlistShareManager
             throw new InvalidArgumentException('Maximum views must be greater than zero.');
         }
 
-        if ($expiresAt === null && ($days = (int) ($this->config['default_expiry_days'] ?? 30)) > 0) {
-            $expiresAt = now()->addDays($days);
-        }
-        $maxViews ??= $this->config['default_max_views'] ?? null;
+        $tokenLength = $this->validatedConfigInteger('token_length', 64, 32, 256);
+        $defaultExpiryDays = $this->validatedConfigInteger('default_expiry_days', 30, 0);
+        $defaultMaxViews = $this->config['default_max_views'] ?? null;
 
-        $token = bin2hex(random_bytes((int) ($this->config['token_length'] ?? 64) / 2));
+        if ($defaultMaxViews !== null) {
+            $defaultMaxViews = $this->validatedConfigInteger('default_max_views', 1, 1);
+        }
+
+        if ($expiresAt === null && $defaultExpiryDays > 0) {
+            $expiresAt = now()->addDays($defaultExpiryDays);
+        }
+
+        $maxViews ??= $defaultMaxViews;
+
+        // token_length is the number of hexadecimal characters, so the number
+        // of random bytes must be exactly half that value.
+        $token = bin2hex(random_bytes(intdiv($tokenLength, 2)));
 
         $share = new WishlistShare();
         $share->shareable()->associate($wishlist);
@@ -77,11 +87,23 @@ class WishlistShareManager
         });
     }
 
+    /**
+     * Revoke a share once. Repeated calls preserve the original revocation time.
+     */
     public function revoke(WishlistShare $share): WishlistShare
     {
-        $share->forceFill(['revoked_at' => now()])->save();
+        return DB::transaction(function () use ($share) {
+            $lockedShare = WishlistShare::query()
+                ->whereKey($share->getKey())
+                ->lockForUpdate()
+                ->firstOrFail();
 
-        return $share->refresh();
+            if ($lockedShare->revoked_at === null) {
+                $lockedShare->forceFill(['revoked_at' => now()])->save();
+            }
+
+            return $lockedShare->refresh();
+        });
     }
 
     public function isActive(WishlistShare $share): bool
@@ -97,5 +119,25 @@ class WishlistShareManager
         }
 
         return true;
+    }
+
+    /**
+     * Read and validate an integer configuration value.
+     */
+    protected function validatedConfigInteger(
+        string $key,
+        int $default,
+        int $minimum,
+        ?int $maximum = null
+    ): int {
+        $value = $this->config[$key] ?? $default;
+        $validated = filter_var($value, FILTER_VALIDATE_INT);
+
+        if ($validated === false || $validated < $minimum || ($maximum !== null && $validated > $maximum)) {
+            $range = $maximum === null ? "at least {$minimum}" : "between {$minimum} and {$maximum}";
+            throw new InvalidArgumentException("Configuration [{$key}] must be an integer {$range}.");
+        }
+
+        return $validated;
     }
 }
